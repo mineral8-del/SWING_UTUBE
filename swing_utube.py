@@ -6,28 +6,13 @@ import requests
 import io
 from datetime import datetime, timedelta, timezone
 import FinanceDataReader as fdr
-import concurrent.futures  # 🚀 (추가) 일꾼 복제 마법 도구
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import requests
-import io
-from datetime import datetime, timedelta, timezone
-import FinanceDataReader as fdr
-import concurrent.futures
+import concurrent.futures  # 🚀 일꾼 복제 마법 도구
 
-# 💡 [여기에 추가] 파이썬 기본 User-Agent를 크롬 브라우저처럼 위장하여 HTTP 403 에러 방지
+# HTTP 403 에러 우회를 위한 전역 User-Agent 설정
 import urllib.request
 opener = urllib.request.build_opener()
 opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')]
 urllib.request.install_opener(opener)
-
-# =============================================================================
-# [설정] 기본 셋팅
-# =============================================================================
-st.set_page_config(layout="centered", page_title="오늘의 핫스윙 Top 10")
-# ... (이하 기존 코드 동일) ...
 
 # =============================================================================
 # [설정] 기본 셋팅
@@ -86,9 +71,9 @@ st.markdown("""
     .stock-name { font-size: 48px; font-weight: 900; color: #FFFFFF; margin-bottom: 8px; line-height: 1.1; }
     .status-badge { font-size: 26px; color: #00E5FF; font-weight: bold; }
     
-    /* 수익률 텍스트 */
-    .yield-text { font-size: 38px; font-weight: 900; color: #00FF00; text-align: right; text-shadow: 0 0 10px rgba(0,255,0,0.3); }
-    .yield-label { font-size: 20px; color: #999999; display: block; margin-bottom: 5px; }
+    /* 💡 수정된 부분: AI 평가 점수를 빛나는 골드(네온 노란색)로 설정 */
+    .yield-text { font-size: 40px; font-weight: 900; color: #FFD700; text-align: right; text-shadow: 0 0 12px rgba(255,215,0,0.4); }
+    .yield-label { font-size: 20px; color: #999999; display: block; margin-bottom: 5px; text-align: right; }
     
     .script-box { 
         background-color: #12141A; padding: 30px; border-radius: 15px; 
@@ -102,36 +87,29 @@ KST = timezone(timedelta(hours=9))
 # =============================================================================
 # 1 & 2 & 3. 데이터 수집 및 분석 알고리즘
 # =============================================================================
-
 @st.cache_data(ttl=3600*12)
-def get_krx_info():  # 💡 여기가 수정되었습니다! (def_krx_info -> get_krx_info)
+def get_krx_info():
     try:
         # 플랜 A: FDR 라이브러리 사용
         df = fdr.StockListing('KRX')
         return df[['Name', 'Code', 'Marcap']].set_index('Name')
-        
     except Exception as e1:
         # 플랜 B: KIND 서버 우회
         try:
             url = 'http://kind.krx.co.kr/corpgeneral/corpList.do?method=download'
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            headers = {'User-Agent': 'Mozilla/5.0'}
             res = requests.get(url, headers=headers, timeout=10)
-            
             df = pd.read_html(io.StringIO(res.text), header=0)[0]
             df = df[['회사명', '종목코드']]
             df.columns = ['Name', 'Code']
-            
-            # 파이썬 충돌을 방지하는 가장 안전한 6자리 0 채우기 방식
             df['Code'] = df['Code'].astype(str).str.zfill(6)
-            
             df['Marcap'] = 1000000000000 
-            
             return df.set_index('Name')
-            
         except Exception as e2:
-            st.error(f"🛑 플랜A 에러: {e1}")
-            st.error(f"🛑 플랜B 에러: {e2}")
+            st.error(f"🛑 통신 에러가 발생했습니다. 잠시 후 다시 접속해주세요.")
             return pd.DataFrame(columns=['Code', 'Marcap'])
+
+@st.cache_data(ttl=300)
 def get_naver_top_universe():
     headers = {'User-Agent': 'Mozilla/5.0'}
     krx_info = get_krx_info()
@@ -202,41 +180,33 @@ def analyze_swing_probability(ticker, is_mega_cap=False, days=60):
     except:
         return 0, "에러", pd.DataFrame(), 0, 0
 
-
 @st.cache_data(ttl=300, show_spinner=False)
 def get_fully_analyzed_data(universe_df):
     results = []
 
-    # 💡 일꾼 1명이 1개 종목을 분석하는 전용 작업 지시서
     def process_stock(row):
         code, name = row['종목코드'], row['종목명']
         marcap_100m = int(row['시가총액'] / 100000000)
-        score, status, _, high_price, target_yield = analyze_swing_probability(code,
-                                                                               is_mega_cap=(marcap_100m >= 100000))
+        score, status, _, high_price, target_yield = analyze_swing_probability(code, is_mega_cap=(marcap_100m >= 100000))
 
         if score > 0:
             return {
                 "상태": status, "점수": score, "종목명": name,
                 "현재가": row['현재가'], "등락률": row['등락률'],
-                "전고점 기대수익(%)": target_yield
+                "AI평가": score / 10.0  # 💡 100점 만점을 10점 만점 단위로 변환!
             }
         return None
 
-    # 🚀 일꾼 15명을 동시에 투입해서 초고속으로 차트를 분석합니다!
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
-        # 모든 종목(100개)을 15명의 일꾼에게 나눠서 던져줌
         futures = [executor.submit(process_stock, row) for i, row in universe_df.iterrows()]
-
-        # 분석이 끝나는 대로 순서대로 수거해서 리스트에 담음
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
             if res:
                 results.append(res)
-
     return results
 
 # =============================================================================
-# 4. 메인 화면 렌더링 (🔥 네온 테마 및 날짜/시간 추가)
+# 4. 메인 화면 렌더링
 # =============================================================================
 universe_df = get_naver_top_universe()
 
@@ -247,13 +217,11 @@ if not universe_df.empty:
     if results:
         top_10_df = pd.DataFrame(results).sort_values(by="점수", ascending=False).head(10)
         
-        # 🔥 오늘 날짜 및 시간 계산
         now_time = datetime.now(KST)
-        badge_str = now_time.strftime('%Y년 %m월 %d일 %H:%M')    # 화면 뱃지용 (예: 2024년 5월 12일 15:20)
-        script_str = now_time.strftime('%Y년 %m월 %d일 %H시 %M분') # 대본 읽기용 (예: 2024년 5월 12일 15시 20분)
+        badge_str = now_time.strftime('%Y년 %m월 %d일 %H:%M')    
+        script_str = now_time.strftime('%Y년 %m월 %d일 %H시 %M분') 
         
         st.markdown(f'<div class="shorts-title">AI 스윙 타점 TOP 10</div>', unsafe_allow_html=True)
-        # 날짜+시간 뱃지 렌더링
         st.markdown(f'<div class="date-badge-container"><span class="date-badge">⚡ {badge_str} 기준</span></div>', unsafe_allow_html=True)
         
         top_10_names = [] 
@@ -262,12 +230,11 @@ if not universe_df.empty:
             rank = i + 1
             t_name = row['종목명']
             t_status = row['상태']
-            t_yield = row['전고점 기대수익(%)']
+            t_ai_score = row['AI평가'] # 💡 기대수익 대신 AI 평가 점수 불러오기
             t_change = row['등락률']
             
             top_10_names.append(t_name)
             
-            # 상승은 빨강/핑크계열, 하락은 파랑/시안계열로 변경하여 네온 테마에 어울리게 맞춤
             change_color = "#FF416C" if t_change > 0 else ("#00E5FF" if t_change < 0 else "#FFFFFF")
             change_sign = "+" if t_change > 0 else ""
             
@@ -281,20 +248,20 @@ if not universe_df.empty:
                     <div class="status-badge">{t_status}</div>
                 </div>
                 <div style="text-align: right;">
-                    <span class="yield-label">기대수익</span>
-                    <div class="yield-text">+{t_yield:.1f}%</div>
+                    <span class="yield-label">AI 종합 평가</span>
+                    <div class="yield-text">⭐ {t_ai_score:.1f}점</div>
                 </div>
             </div>
             ''', unsafe_allow_html=True)
 
         names_str = ", ".join(top_10_names)
         
-        # 대본에도 시간까지 자연스럽게 추가하여 AI 성우가 읽어주도록 세팅
+        # 💡 대본 멘트도 자연스럽게 수정
         script_content = f"""
         {script_str}, AI가 분석한 오늘의 스윙 타점 탑텐입니다! 
         1위부터 10위까지 빠르게 불러드립니다. 
         {names_str} 입니다. 
-        화면을 멈추고 오늘 얼마나 올랐는지, 단기 목표 수익률은 얼마인지 바로 확인해 보세요!
+        화면을 멈추고 오늘 얼마나 올랐는지, AI 종합 평점은 몇 점인지 바로 확인해 보세요!
         """
         st.markdown(f'<div class="script-box" id="tts_script">{script_content}</div>', unsafe_allow_html=True)
 
