@@ -104,7 +104,8 @@ KST = timezone(timedelta(hours=9))
 # =============================================================================
 
 @st.cache_data(ttl=3600*12)
-def get_krx_info():
+@st.cache_data(ttl=3600*12)
+def def_krx_info():
     try:
         # 플랜 A: FDR 라이브러리 사용
         df = fdr.StockListing('KRX')
@@ -120,13 +121,15 @@ def get_krx_info():
             df = pd.read_html(io.StringIO(res.text), header=0)[0]
             df = df[['회사명', '종목코드']]
             df.columns = ['Name', 'Code']
-            df['Code'] = df['Code'].apply(lambda x: f"{x:06d}")
+            
+            # 💡 [핵심 수정] 파이썬 충돌을 방지하는 가장 안전한 6자리 0 채우기 방식
+            df['Code'] = df['Code'].astype(str).str.zfill(6)
+            
             df['Marcap'] = 1000000000000 
             
             return df.set_index('Name')
             
         except Exception as e2:
-            # 💡 [핵심] 어떤 에러인지 화면에 적나라하게 보여줍니다!
             st.error(f"🛑 플랜A 에러: {e1}")
             st.error(f"🛑 플랜B 에러: {e2}")
             return pd.DataFrame(columns=['Code', 'Marcap'])
