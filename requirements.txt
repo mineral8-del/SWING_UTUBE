@@ -7,3 +7,4 @@ requests
 beautifulsoup4
 joblib
 scikit-learn
+finance-datareader>=0.9.70
