@@ -2,9 +2,8 @@ streamlit
 pandas
 numpy
 plotly
-finance-datareader
 requests
-beautifulsoup4
-joblib
-scikit-learn
 finance-datareader>=0.9.70
+lxml
+html5lib
+beautifulsoup4
