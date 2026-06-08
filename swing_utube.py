@@ -7,6 +7,27 @@ import io
 from datetime import datetime, timedelta, timezone
 import FinanceDataReader as fdr
 import concurrent.futures  # 🚀 (추가) 일꾼 복제 마법 도구
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import requests
+import io
+from datetime import datetime, timedelta, timezone
+import FinanceDataReader as fdr
+import concurrent.futures
+
+# 💡 [여기에 추가] 파이썬 기본 User-Agent를 크롬 브라우저처럼 위장하여 HTTP 403 에러 방지
+import urllib.request
+opener = urllib.request.build_opener()
+opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')]
+urllib.request.install_opener(opener)
+
+# =============================================================================
+# [설정] 기본 셋팅
+# =============================================================================
+st.set_page_config(layout="centered", page_title="오늘의 핫스윙 Top 10")
+# ... (이하 기존 코드 동일) ...
 
 # =============================================================================
 # [설정] 기본 셋팅
