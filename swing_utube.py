@@ -104,8 +104,7 @@ KST = timezone(timedelta(hours=9))
 # =============================================================================
 
 @st.cache_data(ttl=3600*12)
-@st.cache_data(ttl=3600*12)
-def def_krx_info():
+def get_krx_info():  # 💡 여기가 수정되었습니다! (def_krx_info -> get_krx_info)
     try:
         # 플랜 A: FDR 라이브러리 사용
         df = fdr.StockListing('KRX')
@@ -122,7 +121,7 @@ def def_krx_info():
             df = df[['회사명', '종목코드']]
             df.columns = ['Name', 'Code']
             
-            # 💡 [핵심 수정] 파이썬 충돌을 방지하는 가장 안전한 6자리 0 채우기 방식
+            # 파이썬 충돌을 방지하는 가장 안전한 6자리 0 채우기 방식
             df['Code'] = df['Code'].astype(str).str.zfill(6)
             
             df['Marcap'] = 1000000000000 
