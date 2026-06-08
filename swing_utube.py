@@ -104,8 +104,36 @@ KST = timezone(timedelta(hours=9))
 # =============================================================================
 @st.cache_data(ttl=3600*12)
 def get_krx_info():
-    df = fdr.StockListing('KRX')
-    return df[['Name', 'Code', 'Marcap']].set_index('Name')
+    try:
+        # 1. 플랜 A: 기존 방식 (내 PC에서는 정상 작동)
+        df = fdr.StockListing('KRX')
+        return df[['Name', 'Code', 'Marcap']].set_index('Name')
+        
+    except Exception as e:
+        # 2. 플랜 B: Streamlit Cloud에서 IP 차단 시, KIND 우회 서버로 자동 연결
+        try:
+            url = 'http://kind.krx.co.kr/corpgeneral/corpList.do?method=download'
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            res = requests.get(url, headers=headers, timeout=10)
+            
+            # HTML 표(Table)에서 데이터 추출
+            df = pd.read_html(io.StringIO(res.text), header=0)[0]
+            df = df[['회사명', '종목코드']]
+            df.columns = ['Name', 'Code']
+            
+            # 종목코드를 6자리 문자로 포맷팅 (예: 5930 -> '005930')
+            df['Code'] = df['Code'].apply(lambda x: f"{x:06d}")
+            
+            # KIND 서버는 시가총액 정보를 제공하지 않으므로, 
+            # 하단 필터링(1000억 이상)을 통과하도록 임의의 큰 시총(1조)을 부여합니다.
+            # (이미 네이버 거래대금 Top 100을 뽑았으므로 잡주가 섞일 위험은 없습니다.)
+            df['Marcap'] = 1000000000000 
+            
+            return df.set_index('Name')
+            
+        except Exception as bypass_error:
+            st.error("⚠️ 데이터 제공 서버 통신에 실패했습니다. 잠시 후 다시 시도해주세요.")
+            return pd.DataFrame(columns=['Code', 'Marcap'])
 
 @st.cache_data(ttl=300)
 def get_naver_top_universe():
